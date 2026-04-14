@@ -165,26 +165,30 @@
 }
 
 + (void)updateRunningState:(NSMutableArray<DJAppInfo *> *)apps {
-    // Walk the kernel process list and match by executable name
     uint64_t cur_proc = proc_self();
     if (!cur_proc) return;
 
-    // Build a lookup by executable name
-    NSMutableDictionary<NSString *, DJAppInfo *> *byExec = [NSMutableDictionary dictionary];
-    for (DJAppInfo *app in apps) {
-        if (app.executableName.length > 0) {
-            byExec[app.executableName] = app;
+    // Build a block to find matching app with prefix checks
+    DJAppInfo *(^findAppByName)(NSString *) = ^DJAppInfo *(NSString *p_name_str) {
+        for (DJAppInfo *app in apps) {
+            if (app.executableName.length > 0) {
+                // p_name might be truncated to 15 chars by XNU MAXCOMLEN
+                if (p_name_str.length == 15) {
+                    if ([app.executableName hasPrefix:p_name_str]) return app;
+                } else {
+                    if ([app.executableName isEqualToString:p_name_str]) return app;
+                }
+            }
         }
-    }
+        return nil;
+    };
 
-    // Walk forward from our proc
     uint64_t proc = cur_proc;
     int scanned = 0;
     while (proc && scanned < 500) {
         char *name = proc_get_p_name(proc);
         if (name) {
-            NSString *nameStr = [NSString stringWithUTF8String:name];
-            DJAppInfo *app = byExec[nameStr];
+            DJAppInfo *app = findAppByName([NSString stringWithUTF8String:name]);
             if (app) {
                 app.pid = kread32(proc + off_proc_p_pid);
                 app.isRunning = YES;
@@ -195,14 +199,12 @@
         scanned++;
     }
 
-    // Walk backward too
     proc = kread64(cur_proc + off_proc_p_list_le_prev);
     scanned = 0;
     while (proc && scanned < 500) {
         char *name = proc_get_p_name(proc);
         if (name) {
-            NSString *nameStr = [NSString stringWithUTF8String:name];
-            DJAppInfo *app = byExec[nameStr];
+            DJAppInfo *app = findAppByName([NSString stringWithUTF8String:name]);
             if (app && !app.isRunning) {
                 app.pid = kread32(proc + off_proc_p_pid);
                 app.isRunning = YES;
@@ -215,7 +217,6 @@
 }
 
 + (pid_t)pidForBundleID:(NSString *)bundleID {
-    // Get executable name from bundle
     Class LSProxy = NSClassFromString(@"LSApplicationProxy");
     if (LSProxy) {
         LSApplicationProxy *proxy = [LSProxy applicationProxyForIdentifier:bundleID];
@@ -225,9 +226,40 @@
             NSDictionary *plist = [NSDictionary dictionaryWithContentsOfFile:plistPath];
             NSString *execName = plist[@"CFBundleExecutable"];
             if (execName) {
-                uint64_t proc = proc_find_by_name(execName.UTF8String);
-                if (proc && proc != (uint64_t)-1) {
-                    return kread32(proc + off_proc_p_pid);
+                // XNU truncates p_name to 15 characters (MAXCOMLEN)
+                NSString *searchName = execName;
+                if (searchName.length > 15) {
+                    searchName = [searchName substringToIndex:15];
+                }
+
+                uint64_t cur_proc = proc_self();
+                if (!cur_proc) return 0;
+                
+                // Do our own walk so we can strncmp/prefix match
+                uint64_t proc = cur_proc;
+                while (proc) {
+                    char *name = proc_get_p_name(proc);
+                    if (name) {
+                        NSString *pNameStr = [NSString stringWithUTF8String:name];
+                        if ([pNameStr isEqualToString:searchName] || (pNameStr.length == 15 && [execName hasPrefix:pNameStr])) {
+                            return kread32(proc + off_proc_p_pid);
+                        }
+                    }
+                    proc = kread64(proc + off_proc_p_list_le_next);
+                    if (!proc || proc == cur_proc) break;
+                }
+                
+                proc = kread64(cur_proc + off_proc_p_list_le_prev);
+                while (proc) {
+                    char *name = proc_get_p_name(proc);
+                    if (name) {
+                        NSString *pNameStr = [NSString stringWithUTF8String:name];
+                        if ([pNameStr isEqualToString:searchName] || (pNameStr.length == 15 && [execName hasPrefix:pNameStr])) {
+                            return kread32(proc + off_proc_p_pid);
+                        }
+                    }
+                    proc = kread64(proc + off_proc_p_list_le_prev);
+                    if (!proc || proc == cur_proc) break;
                 }
             }
         }
