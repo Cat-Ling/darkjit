@@ -188,6 +188,7 @@
     while (proc && scanned < 500) {
         char *name = proc_get_p_name(proc);
         if (name) {
+            name[31] = '\0';
             DJAppInfo *app = findAppByName([NSString stringWithUTF8String:name]);
             if (app) {
                 app.pid = kread32(proc + off_proc_p_pid);
@@ -204,6 +205,7 @@
     while (proc && scanned < 500) {
         char *name = proc_get_p_name(proc);
         if (name) {
+            name[31] = '\0';
             DJAppInfo *app = findAppByName([NSString stringWithUTF8String:name]);
             if (app && !app.isRunning) {
                 app.pid = kread32(proc + off_proc_p_pid);
@@ -233,6 +235,7 @@
     while (proc) {
         char *name = proc_get_p_name(proc);
         if (name) {
+            name[31] = '\0';
             NSString *pNameStr = [NSString stringWithUTF8String:name];
             if ([pNameStr isEqualToString:searchName] || (pNameStr.length == 15 && [execName hasPrefix:pNameStr])) {
                 return kread32(proc + off_proc_p_pid);
@@ -246,6 +249,7 @@
     while (proc) {
         char *name = proc_get_p_name(proc);
         if (name) {
+            name[31] = '\0';
             NSString *pNameStr = [NSString stringWithUTF8String:name];
             if ([pNameStr isEqualToString:searchName] || (pNameStr.length == 15 && [execName hasPrefix:pNameStr])) {
                 return kread32(proc + off_proc_p_pid);
