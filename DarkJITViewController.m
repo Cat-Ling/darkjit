@@ -307,6 +307,12 @@ static NSString * const kCellID = @"DJAppCell";
     _viewToggle.selectedSegmentIndex = 1;
     [self toggleView:_viewToggle];
 
+    // Request background execution time so iOS doesn't suspend us when the target app comes to the foreground!
+    __block UIBackgroundTaskIdentifier bgTask = [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
+        [[UIApplication sharedApplication] endBackgroundTask:bgTask];
+        bgTask = UIBackgroundTaskInvalid;
+    }];
+
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
         printf("\n[*] JIT Enable + Launch: %s (%s)\n", app.displayName.UTF8String, app.bundleID.UTF8String);
 
@@ -335,6 +341,10 @@ static NSString * const kCellID = @"DJAppCell";
 
             if (pid <= 0) {
                 printf("[!] FAILED: App did not start or PID not found\n");
+                if (bgTask != UIBackgroundTaskInvalid) {
+                    [[UIApplication sharedApplication] endBackgroundTask:bgTask];
+                    bgTask = UIBackgroundTaskInvalid;
+                }
                 return;
             }
 
@@ -369,6 +379,11 @@ static NSString * const kCellID = @"DJAppCell";
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
                 self->_viewToggle.selectedSegmentIndex = 0;
                 [self toggleView:self->_viewToggle];
+
+                if (bgTask != UIBackgroundTaskInvalid) {
+                    [[UIApplication sharedApplication] endBackgroundTask:bgTask];
+                    bgTask = UIBackgroundTaskInvalid;
+                }
             });
         });
     });
