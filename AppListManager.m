@@ -216,53 +216,43 @@
     }
 }
 
-+ (pid_t)pidForBundleID:(NSString *)bundleID {
-    Class LSProxy = NSClassFromString(@"LSApplicationProxy");
-    if (LSProxy) {
-        LSApplicationProxy *proxy = [LSProxy applicationProxyForIdentifier:bundleID];
-        NSURL *bundleURL = [proxy bundleURL];
-        if (bundleURL) {
-            NSString *plistPath = [[bundleURL path] stringByAppendingPathComponent:@"Info.plist"];
-            NSDictionary *plist = [NSDictionary dictionaryWithContentsOfFile:plistPath];
-            NSString *execName = plist[@"CFBundleExecutable"];
-            if (execName) {
-                // XNU truncates p_name to 15 characters (MAXCOMLEN)
-                NSString *searchName = execName;
-                if (searchName.length > 15) {
-                    searchName = [searchName substringToIndex:15];
-                }
++ (pid_t)pidForExecutableName:(NSString *)execName {
+    if (!execName || execName.length == 0) return 0;
 
-                uint64_t cur_proc = proc_self();
-                if (!cur_proc) return 0;
-                
-                // Do our own walk so we can strncmp/prefix match
-                uint64_t proc = cur_proc;
-                while (proc) {
-                    char *name = proc_get_p_name(proc);
-                    if (name) {
-                        NSString *pNameStr = [NSString stringWithUTF8String:name];
-                        if ([pNameStr isEqualToString:searchName] || (pNameStr.length == 15 && [execName hasPrefix:pNameStr])) {
-                            return kread32(proc + off_proc_p_pid);
-                        }
-                    }
-                    proc = kread64(proc + off_proc_p_list_le_next);
-                    if (!proc || proc == cur_proc) break;
-                }
-                
-                proc = kread64(cur_proc + off_proc_p_list_le_prev);
-                while (proc) {
-                    char *name = proc_get_p_name(proc);
-                    if (name) {
-                        NSString *pNameStr = [NSString stringWithUTF8String:name];
-                        if ([pNameStr isEqualToString:searchName] || (pNameStr.length == 15 && [execName hasPrefix:pNameStr])) {
-                            return kread32(proc + off_proc_p_pid);
-                        }
-                    }
-                    proc = kread64(proc + off_proc_p_list_le_prev);
-                    if (!proc || proc == cur_proc) break;
-                }
+    // XNU truncates p_name to 15 characters (MAXCOMLEN)
+    NSString *searchName = execName;
+    if (searchName.length > 15) {
+        searchName = [searchName substringToIndex:15];
+    }
+
+    uint64_t cur_proc = proc_self();
+    if (!cur_proc) return 0;
+    
+    // Do our own walk so we can strncmp/prefix match
+    uint64_t proc = cur_proc;
+    while (proc) {
+        char *name = proc_get_p_name(proc);
+        if (name) {
+            NSString *pNameStr = [NSString stringWithUTF8String:name];
+            if ([pNameStr isEqualToString:searchName] || (pNameStr.length == 15 && [execName hasPrefix:pNameStr])) {
+                return kread32(proc + off_proc_p_pid);
             }
         }
+        proc = kread64(proc + off_proc_p_list_le_next);
+        if (!proc || proc == cur_proc) break;
+    }
+    
+    proc = kread64(cur_proc + off_proc_p_list_le_prev);
+    while (proc) {
+        char *name = proc_get_p_name(proc);
+        if (name) {
+            NSString *pNameStr = [NSString stringWithUTF8String:name];
+            if ([pNameStr isEqualToString:searchName] || (pNameStr.length == 15 && [execName hasPrefix:pNameStr])) {
+                return kread32(proc + off_proc_p_pid);
+            }
+        }
+        proc = kread64(proc + off_proc_p_list_le_prev);
+        if (!proc || proc == cur_proc) break;
     }
     return 0;
 }

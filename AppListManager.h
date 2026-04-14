@@ -32,7 +32,7 @@
 + (NSArray<DJAppInfo *> *)installedAppsWithFilesystemAccess;
 
 /// Find the PID of a running app by bundle ID (walks kernel proc list)
-+ (pid_t)pidForBundleID:(NSString *)bundleID;
++ (pid_t)pidForExecutableName:(NSString *)execName;
 
 /// Launch an app by bundle ID
 + (BOOL)launchAppWithBundleID:(NSString *)bundleID;

@@ -322,7 +322,7 @@ static NSString * const kCellID = @"DJAppCell";
             pid_t pid = 0;
             for (int i = 0; i < 30; i++) {
                 usleep(200000); // 200ms
-                pid = [AppListManager pidForBundleID:app.bundleID];
+                pid = [AppListManager pidForExecutableName:app.executableName];
                 if (pid > 0) break;
             }
 
@@ -330,7 +330,7 @@ static NSString * const kCellID = @"DJAppCell";
                 printf("[!] Could not find PID for %s after launch\n", app.bundleID.UTF8String);
                 // Try once more with a longer wait
                 sleep(2);
-                pid = [AppListManager pidForBundleID:app.bundleID];
+                pid = [AppListManager pidForExecutableName:app.executableName];
             }
 
             if (pid <= 0) {
