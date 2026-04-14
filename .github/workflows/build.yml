@@ -21,7 +21,7 @@ jobs:
 
       - name: Setup Theos
         run: |
-          brew install ldid
+          brew install ldid dpkg
           
           # Install Theos
           export THEOS=~/theos
