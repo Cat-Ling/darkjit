@@ -1,0 +1,9 @@
+Package: com.clandestine.darkjit
+Name: DarkJIT
+Version: 1.0.0
+Architecture: iphoneos-arm64
+Description: Enable JIT permissions for user-installed apps via DarkSword kernel exploit
+Maintainer: Clandestine
+Author: Clandestine
+Section: Utilities
+Depends: firmware (>= 17.0)

@@ -1,0 +1,95 @@
+name: Build DarkJIT IPA
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Theos
+        run: |
+          # Install Theos
+          export THEOS=~/theos
+          git clone --recursive https://github.com/theos/theos.git $THEOS
+
+          # Install iOS SDK (latest from theos sdks)
+          curl -sL https://github.com/theos/sdks/releases/latest/download/iPhoneOS16.5.sdk.tar.xz | tar -xJf - -C $THEOS/sdks/ 2>/dev/null || true
+          # Try multiple SDK versions for availability
+          for sdk in iPhoneOS17.5 iPhoneOS17.2 iPhoneOS16.5 iPhoneOS15.6; do
+            if [ -d "$THEOS/sdks/${sdk}.sdk" ]; then
+              echo "Using SDK: ${sdk}"
+              break
+            fi
+            curl -sL "https://github.com/theos/sdks/releases/latest/download/${sdk}.sdk.tar.xz" | tar -xJf - -C $THEOS/sdks/ 2>/dev/null || true
+          done
+
+          ls $THEOS/sdks/
+
+      - name: Build
+        run: |
+          export THEOS=~/theos
+          export PATH="$THEOS/bin:$PATH"
+          make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless 2>&1
+
+      - name: Package IPA
+        run: |
+          # Find the .deb
+          DEB=$(find packages -name "*.deb" | head -1)
+          if [ -z "$DEB" ]; then
+            echo "No .deb found, checking .theos"
+            DEB=$(find .theos -name "*.deb" | head -1)
+          fi
+
+          if [ -z "$DEB" ]; then
+            echo "ERROR: No .deb package found"
+            find . -name "*.deb" 2>/dev/null
+            exit 1
+          fi
+
+          echo "Found deb: $DEB"
+
+          # Extract .app from .deb
+          mkdir -p /tmp/deb_extract /tmp/ipa_payload
+          dpkg-deb -x "$DEB" /tmp/deb_extract
+
+          # Find .app bundle
+          APP_PATH=$(find /tmp/deb_extract -name "DarkJIT.app" -type d | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "ERROR: DarkJIT.app not found in deb"
+            find /tmp/deb_extract -type d | head -30
+            exit 1
+          fi
+
+          # Build IPA structure
+          mkdir -p /tmp/ipa_payload/Payload
+          cp -r "$APP_PATH" /tmp/ipa_payload/Payload/
+
+          # Create IPA
+          cd /tmp/ipa_payload
+          zip -r "$GITHUB_WORKSPACE/DarkJIT.ipa" Payload/
+          echo "IPA created: DarkJIT.ipa"
+          ls -la "$GITHUB_WORKSPACE/DarkJIT.ipa"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DarkJIT-IPA
+          path: DarkJIT.ipa
+          if-no-files-found: error
+
+      - name: Upload deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DarkJIT-deb
+          path: packages/*.deb
+          if-no-files-found: warn
