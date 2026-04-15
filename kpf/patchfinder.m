@@ -132,7 +132,12 @@ int init_xpf(void) {
         if (serializedSystemInfo) {
             xpc_dictionary_apply(serializedSystemInfo, ^bool(const char *key, xpc_object_t value) {
                 if (xpc_get_type(value) == XPC_TYPE_UINT64) {
-                    printf("0x%016llx <- %s\n", xpc_uint64_get_value(value), key);
+                    uint64_t val = xpc_uint64_get_value(value);
+                    printf("0x%016llx <- %s\n", val, key);
+                    
+                    if (strcmp(key, "kernelStruct.vm_map.pmap") == 0) {
+                        off_vm_map_pmap = (uint32_t)val;
+                    }
                 }
                 return true;
             });

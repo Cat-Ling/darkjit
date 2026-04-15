@@ -42,7 +42,7 @@ DarkJIT_FILES += XPF/external/ChOma/src/PatchFinder.c XPF/external/ChOma/src/Pat
 DarkJIT_FILES += XPF/external/ChOma/src/Util.c
 
 # --- Flags ---
-DarkJIT_CFLAGS = -I$(PWD) -I$(PWD)/XPF/src -I$(PWD)/XPF/external/ChOma/include \
+DarkJIT_CFLAGS = -I$(PWD)/include -I$(PWD) -I$(PWD)/XPF/src -I$(PWD)/XPF/external/ChOma/include \
     -I$(PWD)/XPF/external/ChOma/src \
     -I$(PWD)/kexploit -I$(PWD)/kpf -I$(PWD)/utils -I$(PWD)/TaskRop -I$(PWD)/research \
     -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable \

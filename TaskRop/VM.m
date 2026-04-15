@@ -7,7 +7,7 @@
 
 #import <Foundation/Foundation.h>
 #import "RemoteCall.h"
-#import "vm.h"
+#import "VM.h"
 #import "../kexploit/krw.h"
 #import "../kexploit/offsets.h"
 #import "../kexploit/kutils.h"

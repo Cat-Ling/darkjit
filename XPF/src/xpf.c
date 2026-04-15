@@ -4,6 +4,7 @@
 #include <choma/MachOByteOrder.h>
 #include <choma/BufferedStream.h>
 #include <mach/machine.h>
+#include <sys/mman.h>
 #include "xpf.h"
 #include "decompress.h"
 

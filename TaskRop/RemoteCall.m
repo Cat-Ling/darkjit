@@ -11,6 +11,7 @@
 #import <dlfcn.h>
 #import <pthread.h>
 #import <stdint.h>
+#include <sys/mman.h>
 
 #import "RemoteCall.h"
 #import "VM.h"

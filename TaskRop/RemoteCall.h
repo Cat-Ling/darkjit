@@ -9,6 +9,7 @@
 #define RemoteCall_h
 
 #import <mach/mach.h>
+#include <stdbool.h>
 
 struct VMShmem {
     uint64_t port;

@@ -37,24 +37,27 @@
  * We'll try both 0x10 and 0x1C and pick the one that has CS_VALID set.
  */
 
-#define OFF_PROC_RO_CSFLAGS_A  0x1C   // iOS 18.x (confirmed pe_main.js + binary analysis)
-#define OFF_PROC_RO_CSFLAGS_B  0x10   // iOS 17.x alternate
+#define OFF_PROC_RO_CSFLAGS_17  0x10
+#define OFF_PROC_RO_CSFLAGS_18  0x1C
+#define OFF_PROC_RO_CSFLAGS_184 0x24
 
 static uint32_t find_csflags_offset(uint64_t proc_ro) {
-    uint32_t a = kread32(proc_ro + OFF_PROC_RO_CSFLAGS_A);
-    uint32_t b = kread32(proc_ro + OFF_PROC_RO_CSFLAGS_B);
+    uint32_t offsets[] = { OFF_PROC_RO_CSFLAGS_18, OFF_PROC_RO_CSFLAGS_17, OFF_PROC_RO_CSFLAGS_184, 0x18 };
+    for (int i = 0; i < 4; i++) {
+        uint32_t val = kread32(proc_ro + offsets[i]);
+        // CS_VALID (0x1) must be set for any running signed process
+        if (val & CS_VALID) {
+            return offsets[i];
+        }
+    }
 
-    // CS_VALID (0x1) must be set for any running signed process
-    if (a & CS_VALID) return OFF_PROC_RO_CSFLAGS_A;
-    if (b & CS_VALID) return OFF_PROC_RO_CSFLAGS_B;
-
-    // Fallback: prefer the iOS 18 offset
-    NSLog(@"[JIT] WARNING: neither csflags offset has CS_VALID (a=0x%x b=0x%x), using 0x1C", a, b);
-    return OFF_PROC_RO_CSFLAGS_A;
+    // Fallback based on OS version
+    if (SYSTEM_VERSION_GREATER_THAN_OR_EQUAL_TO(@"18.4")) return OFF_PROC_RO_CSFLAGS_184;
+    if (SYSTEM_VERSION_GREATER_THAN_OR_EQUAL_TO(@"18.0")) return OFF_PROC_RO_CSFLAGS_18;
+    return OFF_PROC_RO_CSFLAGS_17;
 }
 
 static uint64_t get_proc_ro(uint64_t proc) {
-    uint64_t proc_ro_raw = kread64(proc + off_proc_p_proc_ro);
     return kread_ptr(proc + off_proc_p_proc_ro);
 }
 
@@ -76,6 +79,34 @@ int enable_jit_for_pid(pid_t pid) {
         return -1;
     }
     printf("[JIT] proc_ro = 0x%llx\n", proc_ro);
+
+    // 2.1. Patch pmap (Step 4 of framework)
+    // This is critical for MAP_JIT to actually work on modern iOS.
+    uint64_t task = kread64(proc_ro + off_proc_ro_pr_task);
+    if (is_kaddr_valid(task)) {
+        uint64_t map = kread_ptr(task + off_task_map);
+        if (is_kaddr_valid(map)) {
+            uint64_t pmap = kread64(map + off_vm_map_pmap);
+            if (is_kaddr_valid(pmap)) {
+                printf("[JIT] Patching pmap (0x%llx) wx_allowed...\n", pmap);
+                kwrite8(pmap + off_pmap_wx_allowed, 1);
+                
+                // Verify
+                uint8_t verify_wx = kread8(pmap + off_pmap_wx_allowed);
+                if (verify_wx == 1) {
+                    printf("[JIT] pmap->wx_allowed enabled ✓\n");
+                } else {
+                    printf("[JIT] WARNING: failed to enable pmap->wx_allowed (read: %d)\n", verify_wx);
+                }
+            } else {
+                printf("[JIT] WARNING: pmap invalid (0x%llx)\n", pmap);
+            }
+        } else {
+            printf("[JIT] WARNING: vm_map invalid (0x%llx)\n", map);
+        }
+    } else {
+        printf("[JIT] WARNING: task invalid (0x%llx)\n", task);
+    }
 
     // 3. Find csflags offset and read current value
     uint32_t csflags_off = find_csflags_offset(proc_ro);
